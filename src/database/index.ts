@@ -1,7 +1,7 @@
 import { Database } from '@nozbe/watermelondb'
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite'
 
-import { mySchema } from '../schema'
+import { mySchema } from './schema'
 import Track from './models/Track'
 import Playlist from './models/Playlist'
 import PlaylistTrack from './models/PlaylistTrack'

@@ -11,7 +11,7 @@ export default class Track extends Model {
   @field('artwork_url') artworkUrl?: string
   @field('duration') duration!: number
   @field('local_uri') localUri?: string
-  @field('sync_status') syncStatus!: string
+  @field('download_status') downloadStatus!: string
 
   @readonly @date('created_at') createdAt!: Date
   @readonly @date('updated_at') updatedAt!: Date

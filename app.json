@@ -28,7 +28,8 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.WAKE_LOCK"
-      ]
+      ],
+      "package": "com.anonymous.resonance"
     },
     "web": {
       "favicon": "./assets/favicon.png"

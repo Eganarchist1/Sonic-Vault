@@ -1,4 +1,4 @@
-import TrackPlayer, { AppKilledBehavior, Capability } from 'react-native-track-player'
+import TrackPlayer, { Capability } from 'react-native-track-player'
 
 export async function setupPlayer() {
   let isSetup = false
@@ -11,9 +11,6 @@ export async function setupPlayer() {
     
     // Configure how the OS displays the controls in the background
     await TrackPlayer.updateOptions({
-      android: {
-        appKilledBehavior: AppKilledBehavior.ContinuePlayback,
-      },
       capabilities: [
         Capability.Play,
         Capability.Pause,

@@ -12,7 +12,7 @@ interface TrackListItemProps {
 
 const TrackListItemBase: React.FC<TrackListItemProps> = ({ track, onPress }) => {
   const renderSyncIcon = () => {
-    switch (track.syncStatus) {
+    switch (track.downloadStatus) {
       case 'DOWNLOADED':
         return <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
       case 'DOWNLOADING':

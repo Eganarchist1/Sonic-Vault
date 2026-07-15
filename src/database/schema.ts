@@ -13,7 +13,7 @@ export const mySchema = appSchema({
         { name: 'artwork_url', type: 'string', isOptional: true },
         { name: 'duration', type: 'number' },
         { name: 'local_uri', type: 'string', isOptional: true },
-        { name: 'sync_status', type: 'string', isIndexed: true },
+        { name: 'download_status', type: 'string', isIndexed: true },
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
       ]

@@ -38,7 +38,7 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
       await TrackPlayer.reset()
       await TrackPlayer.add({
         id: track.id,
-        url: track.localPath || track.remoteUrl, // Use local if downloaded, else stream
+        url: track.localUri || '', // Use local if downloaded, else empty for now
         title: track.title,
         artist: track.artist,
         artwork: track.artworkUrl,

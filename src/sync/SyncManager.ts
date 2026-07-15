@@ -83,7 +83,7 @@ export class SyncManager {
           // Mark as DELETED_REMOTELY
           batchOperations.push(
             track.prepareUpdate(t => {
-              t.syncStatus = 'DELETED_REMOTELY'
+              t.downloadStatus = 'DELETED_REMOTELY'
             })
           )
           // Note: Actual file deletion would happen outside the DB write lock, 
@@ -116,7 +116,8 @@ export class SyncManager {
               t.artist = track.artist
               t.artworkUrl = track.artworkUrl
               t.duration = track.duration
-              t.syncStatus = 'PENDING'
+              t.localUri = undefined
+              t.downloadStatus = 'PENDING'
             })
             newTrack = preparedTrack as unknown as Track
             batchOperations.push(preparedTrack)
