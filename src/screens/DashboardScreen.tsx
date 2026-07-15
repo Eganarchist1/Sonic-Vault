@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react'
-import { View, Text, StyleSheet, FlatList, StatusBar } from 'react-native'
+import { View, Text, StyleSheet, FlatList, StatusBar, TouchableOpacity } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { BlurView } from 'expo-blur'
 import withObservables from '@nozbe/with-observables'
+import { Ionicons } from '@expo/vector-icons'
+import TrackPlayer, { State, usePlaybackState, useActiveTrack } from 'react-native-track-player'
+import * as SecureStore from 'expo-secure-store'
+
 import { database } from '../database'
 import Track from '../database/models/Track'
 import { TrackListItem } from '../components/TrackListItem'
 import { colors } from '../theme/colors'
 import { WebViewLogin } from '../extractors/WebViewLogin'
-import * as SecureStore from 'expo-secure-store'
 
 interface DashboardProps {
   tracks: Track[]
@@ -17,6 +20,8 @@ interface DashboardProps {
 const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
   const [needsLogin, setNeedsLogin] = useState<boolean>(false)
   const [loginPlatform, setLoginPlatform] = useState<'spotify'|'youtube'>('spotify')
+  const playbackState = usePlaybackState()
+  const activeTrack = useActiveTrack()
 
   useEffect(() => {
     // Check if we have the extracted web tokens
@@ -27,6 +32,30 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
       }
     })
   }, [])
+
+  const handlePlayTrack = async (track: Track) => {
+    try {
+      await TrackPlayer.reset()
+      await TrackPlayer.add({
+        id: track.id,
+        url: track.localPath || track.remoteUrl, // Use local if downloaded, else stream
+        title: track.title,
+        artist: track.artist,
+        artwork: track.artworkUrl,
+      })
+      await TrackPlayer.play()
+    } catch (e) {
+      console.error('Failed to play track', e)
+    }
+  }
+
+  const togglePlayback = async () => {
+    if (playbackState.state === State.Playing) {
+      await TrackPlayer.pause()
+    } else {
+      await TrackPlayer.play()
+    }
+  }
 
   if (needsLogin) {
     return (
@@ -60,7 +89,7 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
         renderItem={({ item }) => (
           <TrackListItem 
             track={item} 
-            onPress={(t) => console.log('Play track:', t.title)} 
+            onPress={handlePlayTrack} 
           />
         )}
         ListEmptyComponent={
@@ -70,6 +99,25 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
           </View>
         }
       />
+
+      {/* Mini Player */}
+      {activeTrack && (
+        <BlurView intensity={100} tint="dark" style={styles.miniPlayer}>
+          <View style={styles.miniPlayerContent}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.miniPlayerTitle} numberOfLines={1}>{activeTrack.title}</Text>
+              <Text style={styles.miniPlayerArtist} numberOfLines={1}>{activeTrack.artist}</Text>
+            </View>
+            <TouchableOpacity onPress={togglePlayback} style={styles.playPauseBtn}>
+              <Ionicons 
+                name={playbackState.state === State.Playing ? 'pause' : 'play'} 
+                size={28} 
+                color={colors.textPrimary} 
+              />
+            </TouchableOpacity>
+          </View>
+        </BlurView>
+      )}
     </View>
   )
 }
@@ -106,6 +154,33 @@ const styles = StyleSheet.create({
   emptySubtext: {
     color: colors.textSecondary,
     marginTop: 8,
+  },
+  miniPlayer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 10,
+    right: 10,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  miniPlayerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+  },
+  miniPlayerTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  miniPlayerArtist: {
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+  playPauseBtn: {
+    padding: 8,
   }
 })
 
