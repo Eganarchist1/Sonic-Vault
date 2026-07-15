@@ -1,0 +1,48 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'resonance/package-lock.json'
+
+      - name: Setup Java (JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Install npm dependencies
+        working-directory: ./resonance
+        run: npm ci
+
+      - name: Expo Prebuild (Generate Native Android Folder)
+        working-directory: ./resonance
+        run: npx expo prebuild --platform android --clean
+
+      - name: Build Release APK
+        working-directory: ./resonance/android
+        # This standard gradle command compiles the release APK
+        run: ./gradlew assembleRelease
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: resonance-release-apk
+          path: resonance/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 7
