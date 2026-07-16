@@ -11,27 +11,32 @@ import { database } from '../database'
 import Track from '../database/models/Track'
 import { TrackListItem } from '../components/TrackListItem'
 import { colors } from '../theme/colors'
-import { WebViewLogin } from '../extractors/WebViewLogin'
+import { useNavigation } from '@react-navigation/native'
+import { SyncManager } from '../sync/SyncManager'
+import { SpotifyExtractor } from '../extractors/SpotifyExtractor'
 
 interface DashboardProps {
   tracks: Track[]
 }
 
 const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
-  const [needsLogin, setNeedsLogin] = useState<boolean>(false)
-  const [loginPlatform, setLoginPlatform] = useState<'spotify'|'youtube'>('spotify')
+  const navigation = useNavigation<any>()
   const playbackState = usePlaybackState()
   const activeTrack = useActiveTrack()
+  const [isSyncing, setIsSyncing] = useState(false)
 
-  useEffect(() => {
-    // Check if we have the extracted web tokens
-    SecureStore.getItemAsync('RES_SPOTIFY_EXTRACTED_TOKEN').then(token => {
-      if (!token) {
-        setLoginPlatform('spotify')
-        setNeedsLogin(true)
-      }
-    })
-  }, [])
+  const handleSync = async () => {
+    try {
+      setIsSyncing(true)
+      const playlist = await SpotifyExtractor.getLikedSongs()
+      await SyncManager.syncPlaylist(playlist)
+      alert('Sync completed successfully!')
+    } catch (e: any) {
+      alert(e.message || 'Error syncing library')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   const handlePlayTrack = async (track: Track) => {
     try {
@@ -57,15 +62,7 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
     }
   }
 
-  if (needsLogin) {
-    return (
-      <WebViewLogin 
-        platform={loginPlatform} 
-        onSuccess={() => setNeedsLogin(false)} 
-        onCancel={() => setNeedsLogin(false)} 
-      />
-    )
-  }
+  // Login logic is now handled in the Settings screen
 
   return (
     <View style={styles.container}>
@@ -80,6 +77,9 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
       {/* Glassmorphism Header */}
       <BlurView intensity={80} tint="dark" style={styles.header}>
         <Text style={styles.headerTitle}>Your Library</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.settingsBtn}>
+          <Ionicons name="settings-outline" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
       </BlurView>
 
       <FlatList
@@ -95,7 +95,14 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No tracks synced yet.</Text>
-            <Text style={styles.emptySubtext}>Waiting for background sync engine...</Text>
+            <Text style={styles.emptySubtext}>Link your account in Settings and click Sync.</Text>
+            <TouchableOpacity 
+              style={[styles.syncBtn, isSyncing && styles.syncBtnDisabled]} 
+              onPress={handleSync}
+              disabled={isSyncing}
+            >
+              <Text style={styles.syncBtnText}>{isSyncing ? 'Syncing...' : 'Sync Library Now'}</Text>
+            </TouchableOpacity>
           </View>
         }
       />
@@ -133,11 +140,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   headerTitle: {
     color: colors.textPrimary,
     fontSize: 28,
     fontWeight: 'bold',
+  },
+  settingsBtn: {
+    padding: 8,
   },
   listContent: {
     paddingBottom: 100, // Leave room for bottom player sheet
@@ -154,6 +167,21 @@ const styles = StyleSheet.create({
   emptySubtext: {
     color: colors.textSecondary,
     marginTop: 8,
+    marginBottom: 20,
+  },
+  syncBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  syncBtnDisabled: {
+    opacity: 0.5,
+  },
+  syncBtnText: {
+    color: colors.textPrimary,
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   miniPlayer: {
     position: 'absolute',

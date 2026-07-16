@@ -16,14 +16,19 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
   const config = {
     spotify: {
       url: 'https://accounts.spotify.com/en/login?continue=https://open.spotify.com/',
-      // Injects a script to look for the access token in Spotify's local storage or DOM
+      // Injects a script to reliably fetch the token from Spotify's internal Web Player session API
       injection: `
         setInterval(function() {
           try {
-            // Spotify stores access tokens in localStorage sometimes, or we can look for session data
-            let tokenData = localStorage.getItem('wp-access-token') || localStorage.getItem('sp_dc');
-            if (tokenData) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'spotify', data: tokenData }));
+            if (window.location.href.includes('open.spotify.com')) {
+              fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player')
+                .then(res => res.json())
+                .then(data => {
+                  if (data && data.accessToken) {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'spotify', data: data.accessToken }));
+                  }
+                })
+                .catch(e => {});
             }
           } catch (e) {}
         }, 2000);
