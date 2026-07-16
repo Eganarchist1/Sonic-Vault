@@ -15,46 +15,8 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
 
   const config = {
     spotify: {
-      url: 'https://accounts.spotify.com/en/login?continue=https://open.spotify.com/',
-      injection: `
-        (function() {
-          if (window.__TOKEN_HOOK_INSTALLED) return;
-          window.__TOKEN_HOOK_INSTALLED = true;
-          window.__HAS_EXTRACTED_TOKEN = false;
-          
-          function sendToken(token) {
-            if (window.__HAS_EXTRACTED_TOKEN) return;
-            window.__HAS_EXTRACTED_TOKEN = true;
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'spotify', data: token }));
-          }
-
-          // Intercept XHR
-          var XHR = XMLHttpRequest.prototype;
-          var setRequestHeader = XHR.setRequestHeader;
-          
-          XHR.setRequestHeader = function(header, value) {
-            if (header.toLowerCase() === 'authorization' && value.includes('Bearer ')) {
-              sendToken(value.replace('Bearer ', ''));
-            }
-            return setRequestHeader.apply(this, arguments);
-          };
-          
-          // Intercept Fetch
-          var originalFetch = window.fetch;
-          window.fetch = function() {
-            var args = arguments;
-            if (args[1] && args[1].headers) {
-              var headers = new Headers(args[1].headers);
-              var auth = headers.get('authorization') || headers.get('Authorization');
-              if (auth && auth.includes('Bearer ')) {
-                sendToken(auth.replace('Bearer ', ''));
-              }
-            }
-            return originalFetch.apply(this, args);
-          };
-        })();
-        true;
-      `
+      url: 'https://accounts.spotify.com/authorize?client_id=8a8ce1c224b94e2289c656d0f1eb0789&response_type=token&redirect_uri=https://developer.spotify.com/&scope=user-library-read%20playlist-read-private',
+      injection: `true;` // No injection needed for Spotify anymore, we intercept the URL redirect
     },
     youtube: {
       url: 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https://music.youtube.com/',
@@ -93,12 +55,26 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
     }
   }
 
-  const handleNavigationStateChange = (navState: any) => {
+  const handleNavigationStateChange = async (navState: any) => {
     setCurrentUrl(navState.url)
-    // Dynamically inject scripts when crossing domain boundaries
-    if (navState.url.includes('open.spotify.com') && platform === 'spotify') {
-      webviewRef.current?.injectJavaScript(config.spotify.injection)
+    
+    // Intercept Spotify OAuth Redirect
+    if (platform === 'spotify' && navState.url.includes('developer.spotify.com') && navState.url.includes('#access_token=')) {
+      try {
+        const tokenMatch = navState.url.match(/#access_token=([^&]*)/);
+        if (tokenMatch && tokenMatch[1]) {
+          const extractedToken = tokenMatch[1];
+          await SecureStore.setItemAsync('RES_SPOTIFY_EXTRACTED_TOKEN', extractedToken);
+          console.log('Successfully extracted OFFICIAL Spotify OAuth token from URL');
+          onSuccess();
+          return;
+        }
+      } catch (e) {
+        console.error('Failed to extract Spotify token from URL redirect', e);
+      }
     }
+
+    // Dynamically inject scripts when crossing domain boundaries for YouTube
     if (navState.url.includes('music.youtube.com') && platform === 'youtube') {
       webviewRef.current?.injectJavaScript(config.youtube.injection)
     }

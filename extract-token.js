@@ -1,78 +1,99 @@
-const puppeteer = require('puppeteer-core');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+puppeteer.use(StealthPlugin());
+
 const fs = require('fs');
 
 (async () => {
-  console.log('Connecting to interactive browser...');
-  const browser = await puppeteer.connect({
-    browserURL: 'http://127.0.0.1:9222',
-    defaultViewport: null
+  console.log('Launching interactive browser...');
+  const browser = await puppeteer.launch({
+    headless: false,
+    defaultViewport: null,
+    executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    args: ['--start-maximized']
   });
-  const pages = await browser.pages();
-  const page = pages.length > 0 ? pages[0] : await browser.newPage();
   
-  // Set a standard desktop User-Agent
+  const page = await browser.newPage();
+  
+  // Hide Puppeteer/Webdriver signature from Google's bot detection
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', {
+      get: () => false,
+    });
+  });
+
+  // Use a standard Windows desktop User Agent to prevent mobile-specific capability checks
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36');
 
   console.log('Monitoring Network Requests...');
-  let foundToken = false;
+  let foundSpotify = false;
+  let foundYouTube = false;
   
   await page.setRequestInterception(true);
   page.on('request', request => {
     const headers = request.headers();
-    const authHeader = headers['authorization'] || headers['Authorization'];
+    const url = request.url();
     
-    if (authHeader && authHeader.startsWith('Bearer ') && request.url().includes('spotify.com')) {
-      const token = authHeader.replace('Bearer ', '');
-      if (!foundToken && token.length > 50) {
+    // Check Spotify
+    const authHeader = headers['authorization'] || headers['Authorization'];
+    if (authHeader && authHeader.includes('Bearer ') && (url.includes('spotify.com') || url.includes('spotify.net'))) {
+      if (!foundSpotify) {
         console.log('\n\n========================================');
         console.log('✅ EXTRACTED SPOTIFY ACCESS TOKEN:');
-        console.log(token);
-        console.log('From URL:', request.url());
+        console.log(authHeader.replace('Bearer ', ''));
+        console.log('App-Platform Header:', headers['app-platform']);
         console.log('========================================\n\n');
-        foundToken = true;
-        fs.writeFileSync('spotify-token.txt', token);
+        foundSpotify = true;
+      }
+    }
+
+    // Check YouTube Music
+    if (url.includes('music.youtube.com') || url.includes('youtubei/v1')) {
+      const cookie = headers['cookie'] || headers['Cookie'];
+      if (cookie && cookie.includes('SAPISID') && !foundYouTube) {
+        console.log('\n\n========================================');
+        console.log('✅ EXTRACTED YOUTUBE MUSIC COOKIES:');
+        console.log('SAPISID Found. Authorization Headers:', authHeader || 'None');
+        console.log('========================================\n\n');
+        foundYouTube = true;
+      }
+    }
+    
+    request.continue();
+  });
+
+  console.log('Navigating to Spotify and YouTube Music...');
+  
+  // Open Spotify in the first tab
+  await page.goto('https://accounts.spotify.com/en/login?continue=https://open.spotify.com/', { waitUntil: 'networkidle2' });
+  console.log('Spotify opened! Please log in.');
+
+  // Open YouTube Music in a second tab
+  const ytPage = await browser.newPage();
+  await ytPage.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+  });
+  await ytPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36');
+  
+  // Apply the same interceptor to the new tab
+  await ytPage.setRequestInterception(true);
+  ytPage.on('request', request => {
+    const headers = request.headers();
+    const url = request.url();
+    if (url.includes('music.youtube.com') || url.includes('youtubei/v1')) {
+      const cookie = headers['cookie'] || headers['Cookie'];
+      if (cookie && cookie.includes('SAPISID') && !foundYouTube) {
+        console.log('\n\n========================================');
+        console.log('✅ EXTRACTED YOUTUBE MUSIC COOKIES:');
+        console.log('SAPISID Found. Authorization Headers:', headers['authorization'] || 'None');
+        console.log('========================================\n\n');
+        foundYouTube = true;
       }
     }
     request.continue();
   });
 
-  page.on('response', async response => {
-    const url = response.url();
-    if (url.includes('get_access_token')) {
-      console.log('\n[API Call] /get_access_token was hit!');
-      try {
-        const json = await response.json();
-        console.log('Response:', JSON.stringify(json, null, 2));
-      } catch (e) {
-        console.log('Could not parse JSON response from /get_access_token');
-      }
-    }
-  });
-
-  console.log('Navigating to Spotify Login...');
-  await page.goto('https://accounts.spotify.com/en/login?continue=https://open.spotify.com/', { waitUntil: 'networkidle2' });
-
-  console.log('Please log in manually in the opened browser window.');
-  
-  // Monitor DOM every 5 seconds for the session tag
-  setInterval(async () => {
-    try {
-      const sessionData = await page.evaluate(() => {
-        const el = document.getElementById('session');
-        return el ? el.innerHTML : null;
-      });
-      if (sessionData && !foundToken) {
-        const parsed = JSON.parse(sessionData);
-        if (parsed.accessToken) {
-          console.log('\n\n========================================');
-          console.log('✅ EXTRACTED SPOTIFY ACCESS TOKEN FROM DOM <script id="session"> :');
-          console.log(parsed.accessToken);
-          console.log('========================================\n\n');
-          foundToken = true;
-          fs.writeFileSync('spotify-token.txt', parsed.accessToken);
-        }
-      }
-    } catch (e) {}
-  }, 5000);
+  await ytPage.goto('https://accounts.google.com/ServiceLogin?service=youtube&continue=https://music.youtube.com/', { waitUntil: 'networkidle2' });
+  console.log('YouTube Music opened in the second tab! You can log in whenever you are ready.');
 
 })();
