@@ -41,7 +41,7 @@ const redirect_uri = 'https://developer.spotify.com/';
   console.log('Navigating directly to Official Spotify Developer Login...');
   
   // Use response_type=code with PKCE code_challenge
-  const authUrl = \`https://accounts.spotify.com/authorize?client_id=\${client_id}&response_type=code&redirect_uri=\${encodeURIComponent(redirect_uri)}&code_challenge_method=S256&code_challenge=\${code_challenge}&scope=user-library-read%20playlist-read-private\`;
+  const authUrl = `https://accounts.spotify.com/authorize?client_id=${client_id}&response_type=code&redirect_uri=${encodeURIComponent(redirect_uri)}&code_challenge_method=S256&code_challenge=${code_challenge}&scope=user-library-read%20playlist-read-private`;
   
   await page.goto(authUrl, { waitUntil: 'networkidle2' });
   console.log('Spotify Official Developer Login opened! Please log in and click "Agree".');

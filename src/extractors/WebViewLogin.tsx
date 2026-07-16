@@ -55,7 +55,7 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
         }
         const challenge = base64urlencode(hexToUint8Array(hashed))
 
-        const url = \`https://accounts.spotify.com/authorize?client_id=\${CLIENT_ID}&response_type=code&redirect_uri=\${encodeURIComponent(REDIRECT_URI)}&code_challenge_method=S256&code_challenge=\${challenge}&scope=user-library-read%20playlist-read-private\`
+        const url = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&code_challenge_method=S256&code_challenge=${challenge}&scope=user-library-read%20playlist-read-private`
         setSpotifyUrl(url)
       }
       initPKCE()
@@ -65,11 +65,11 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
   const config = {
     spotify: {
       url: spotifyUrl,
-      injection: \`true;\`
+      injection: `true;`
     },
     youtube: {
       url: 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https://music.youtube.com/',
-      injection: \`
+      injection: `
         (function() {
           if (window.__TOKEN_HOOK_INSTALLED) return;
           window.__TOKEN_HOOK_INSTALLED = true;
@@ -86,7 +86,7 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
           }, 2000);
         })();
         true;
-      \`
+      `
     }
   }
 
@@ -96,7 +96,7 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
       if (parsed.type === 'TOKEN_EXTRACTED') {
         const key = parsed.platform === 'spotify' ? 'RES_SPOTIFY_EXTRACTED_TOKEN' : 'RES_YOUTUBE_EXTRACTED_COOKIE'
         await SecureStore.setItemAsync(key, parsed.data)
-        console.log(\`Successfully extracted and saved token for \${parsed.platform}\`)
+        console.log(`Successfully extracted and saved token for ${parsed.platform}`)
         onSuccess()
       }
     } catch (e) {
