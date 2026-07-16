@@ -27,8 +27,6 @@ export async function setupPlayer() {
       progressUpdateEventInterval: 2,
     })
     
-    isSetup = true
-  } finally {
-    return isSetup
+    return true
   }
 }
