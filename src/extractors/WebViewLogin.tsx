@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native'
 import { WebView } from 'react-native-webview'
 import * as SecureStore from 'expo-secure-store'
+import * as Crypto from 'expo-crypto'
 
 interface WebViewLoginProps {
   platform: 'spotify' | 'youtube'
@@ -9,18 +10,66 @@ interface WebViewLoginProps {
   onCancel: () => void
 }
 
+const CLIENT_ID = '8a8ce1c224b94e2289c656d0f1eb0789'
+const REDIRECT_URI = 'https://developer.spotify.com/'
+
+const generateRandomString = (length: number) => {
+  let text = '';
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < length; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
+};
+
+const base64urlencode = (buffer: ArrayBuffer) => {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+};
+
 export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess, onCancel }) => {
   const webviewRef = useRef<WebView>(null)
   const [currentUrl, setCurrentUrl] = useState('')
+  const [spotifyUrl, setSpotifyUrl] = useState('')
+  const [codeVerifier, setCodeVerifier] = useState('')
+
+  useEffect(() => {
+    if (platform === 'spotify') {
+      const initPKCE = async () => {
+        const verifier = generateRandomString(128)
+        setCodeVerifier(verifier)
+        
+        const hashed = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          verifier
+        )
+        // Expo Crypto returns hex, we need base64url for PKCE
+        const hexToUint8Array = (hex: string) => {
+          const arr = new Uint8Array(hex.length / 2)
+          for (let i = 0; i < hex.length; i += 2) {
+            arr[i / 2] = parseInt(hex.substring(i, i + 2), 16)
+          }
+          return arr
+        }
+        const challenge = base64urlencode(hexToUint8Array(hashed))
+
+        const url = \`https://accounts.spotify.com/authorize?client_id=\${CLIENT_ID}&response_type=code&redirect_uri=\${encodeURIComponent(REDIRECT_URI)}&code_challenge_method=S256&code_challenge=\${challenge}&scope=user-library-read%20playlist-read-private\`
+        setSpotifyUrl(url)
+      }
+      initPKCE()
+    }
+  }, [platform])
 
   const config = {
     spotify: {
-      url: 'https://accounts.spotify.com/authorize?client_id=8a8ce1c224b94e2289c656d0f1eb0789&response_type=token&redirect_uri=https://developer.spotify.com/&scope=user-library-read%20playlist-read-private',
-      injection: `true;` // No injection needed for Spotify anymore, we intercept the URL redirect
+      url: spotifyUrl,
+      injection: \`true;\`
     },
     youtube: {
       url: 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https://music.youtube.com/',
-      injection: `
+      injection: \`
         (function() {
           if (window.__TOKEN_HOOK_INSTALLED) return;
           window.__TOKEN_HOOK_INSTALLED = true;
@@ -37,7 +86,7 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
           }, 2000);
         })();
         true;
-      `
+      \`
     }
   }
 
@@ -47,7 +96,7 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
       if (parsed.type === 'TOKEN_EXTRACTED') {
         const key = parsed.platform === 'spotify' ? 'RES_SPOTIFY_EXTRACTED_TOKEN' : 'RES_YOUTUBE_EXTRACTED_COOKIE'
         await SecureStore.setItemAsync(key, parsed.data)
-        console.log(`Successfully extracted and saved token for ${parsed.platform}`)
+        console.log(\`Successfully extracted and saved token for \${parsed.platform}\`)
         onSuccess()
       }
     } catch (e) {
@@ -58,15 +107,37 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
   const handleNavigationStateChange = async (navState: any) => {
     setCurrentUrl(navState.url)
     
-    // Intercept Spotify OAuth Redirect
-    if (platform === 'spotify' && navState.url.includes('developer.spotify.com') && navState.url.includes('#access_token=')) {
+    // Intercept Spotify PKCE Redirect
+    if (platform === 'spotify' && navState.url.includes('developer.spotify.com') && navState.url.includes('code=')) {
       try {
-        const tokenMatch = navState.url.match(/#access_token=([^&]*)/);
-        if (tokenMatch && tokenMatch[1]) {
-          const extractedToken = tokenMatch[1];
-          await SecureStore.setItemAsync('RES_SPOTIFY_EXTRACTED_TOKEN', extractedToken);
-          console.log('Successfully extracted OFFICIAL Spotify OAuth token from URL');
-          onSuccess();
+        const codeMatch = navState.url.match(/[?&]code=([^&]*)/);
+        if (codeMatch && codeMatch[1]) {
+          const authCode = codeMatch[1];
+          console.log('Intercepted Auth Code, exchanging for token...');
+          
+          const response = await fetch('https://accounts.spotify.com/api/token', {
+             method: 'POST',
+             headers: {
+               'Content-Type': 'application/x-www-form-urlencoded',
+             },
+             body: new URLSearchParams({
+               client_id: CLIENT_ID,
+               grant_type: 'authorization_code',
+               code: authCode,
+               redirect_uri: REDIRECT_URI,
+               code_verifier: codeVerifier,
+             }).toString()
+           });
+
+           const tokenData = await response.json();
+
+           if (tokenData.access_token) {
+              await SecureStore.setItemAsync('RES_SPOTIFY_EXTRACTED_TOKEN', tokenData.access_token);
+              console.log('Successfully extracted OFFICIAL Spotify PKCE OAuth token');
+              onSuccess();
+           } else {
+              console.error('Failed to exchange PKCE code for token', tokenData)
+           }
           return;
         }
       } catch (e) {
@@ -74,10 +145,13 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
       }
     }
 
-    // Dynamically inject scripts when crossing domain boundaries for YouTube
     if (navState.url.includes('music.youtube.com') && platform === 'youtube') {
       webviewRef.current?.injectJavaScript(config.youtube.injection)
     }
+  }
+
+  if (platform === 'spotify' && !spotifyUrl) {
+    return <View style={styles.container} />
   }
 
   return (

@@ -64,9 +64,25 @@ const fs = require('fs');
 
   console.log('Navigating to Spotify and YouTube Music...');
   
-  // Open Spotify in the first tab
-  await page.goto('https://accounts.spotify.com/en/login?continue=https://open.spotify.com/', { waitUntil: 'networkidle2' });
-  console.log('Spotify opened! Please log in.');
+  // Open Spotify Official Developer Login in the first tab
+  await page.goto('https://accounts.spotify.com/authorize?client_id=8a8ce1c224b94e2289c656d0f1eb0789&response_type=token&redirect_uri=https://developer.spotify.com/&scope=user-library-read%20playlist-read-private', { waitUntil: 'networkidle2' });
+  console.log('Spotify Official Developer Login opened! Please log in and click "Agree".');
+
+  // Listen for the URL to change to the developer callback URL so we can grab the token!
+  page.on('framenavigated', async (frame) => {
+    if (frame === page.mainFrame()) {
+      const url = frame.url();
+      if (url.includes('developer.spotify.com') && url.includes('#access_token=')) {
+        const tokenMatch = url.match(/#access_token=([^&]*)/);
+        if (tokenMatch && tokenMatch[1]) {
+           console.log('\n\n========================================');
+           console.log('✅ EXTRACTED OFFICIAL SPOTIFY OAUTH TOKEN:');
+           console.log(tokenMatch[1]);
+           console.log('========================================\n\n');
+        }
+      }
+    }
+  });
 
   // Open YouTube Music in a second tab
   const ytPage = await browser.newPage();
