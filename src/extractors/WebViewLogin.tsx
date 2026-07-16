@@ -80,7 +80,11 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
         onNavigationStateChange={(navState) => setCurrentUrl(navState.url)}
         sharedCookiesEnabled={true}
         thirdPartyCookiesEnabled={true}
-        userAgent="Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.196 Mobile Safari/537.36"
+        allowsProtectedMedia={true}
+        mediaPlaybackRequiresUserAction={false}
+        allowsInlineMediaPlayback={true}
+        mixedContentMode={'always'}
+        userAgent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
         style={styles.webview}
       />
     </View>
