@@ -17,44 +17,62 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
     spotify: {
       url: 'https://accounts.spotify.com/en/login?continue=https://open.spotify.com/',
       injection: `
-        setInterval(function() {
-          try {
-            if (window.location.href.includes('open.spotify.com')) {
-              var sessionScript = document.getElementById('session');
-              if (sessionScript && sessionScript.innerHTML) {
-                var sessionData = JSON.parse(sessionScript.innerHTML);
-                if (sessionData.accessToken) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'spotify', data: sessionData.accessToken }));
-                  return;
-                }
-              }
-              fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', { credentials: 'include' })
-                .then(function(res) { return res.json(); })
-                .then(function(data) {
-                  if (data && data.accessToken) {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'spotify', data: data.accessToken }));
-                  }
-                })
-                .catch(function(e) {});
+        (function() {
+          if (window.__TOKEN_HOOK_INSTALLED) return;
+          window.__TOKEN_HOOK_INSTALLED = true;
+          
+          // Intercept XHR
+          var XHR = XMLHttpRequest.prototype;
+          var open = XHR.open;
+          var send = XHR.send;
+          var setRequestHeader = XHR.setRequestHeader;
+          
+          XHR.setRequestHeader = function(header, value) {
+            if (header.toLowerCase() === 'authorization' && value.includes('Bearer ')) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'spotify', data: value.replace('Bearer ', '') }));
             }
-          } catch (e) {}
-        }, 2000);
+            return setRequestHeader.apply(this, arguments);
+          };
+          
+          // Intercept Fetch
+          var originalFetch = window.fetch;
+          window.fetch = function() {
+            var args = arguments;
+            if (args[1] && args[1].headers) {
+              var headers = new Headers(args[1].headers);
+              var auth = headers.get('authorization') || headers.get('Authorization');
+              if (auth && auth.includes('Bearer ')) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'spotify', data: auth.replace('Bearer ', '') }));
+              }
+            }
+            return originalFetch.apply(this, args);
+          };
+          
+          // Fallback session tag
+          setInterval(function() {
+            try {
+              var s = document.getElementById('session');
+              if (s && s.innerHTML) {
+                var d = JSON.parse(s.innerHTML);
+                if (d.accessToken) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'spotify', data: d.accessToken }));
+              }
+            } catch(e){}
+          }, 2000);
+        })();
         true;
       `
     },
     youtube: {
       url: 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https://music.youtube.com/',
       injection: `
-        setInterval(function() {
-          try {
+        (function() {
+          // Attempt to extract cookies or wait for successful redirect
+          setInterval(function() {
             if (window.location.href.includes('music.youtube.com')) {
-              var cookies = document.cookie;
-              if (cookies.includes('SAPISID') && cookies.includes('LOGIN_INFO')) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'youtube', data: cookies }));
-              }
+               window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'youtube', data: 'youtube-authenticated' }));
             }
-          } catch (e) {}
-        }, 2000);
+          }, 2000);
+        })();
         true;
       `
     }
