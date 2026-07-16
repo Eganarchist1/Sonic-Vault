@@ -16,19 +16,26 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
   const config = {
     spotify: {
       url: 'https://accounts.spotify.com/en/login?continue=https://open.spotify.com/',
-      // Injects a script to reliably fetch the token from Spotify's internal Web Player session API
       injection: `
         setInterval(function() {
           try {
             if (window.location.href.includes('open.spotify.com')) {
-              fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player')
-                .then(res => res.json())
-                .then(data => {
+              var sessionScript = document.getElementById('session');
+              if (sessionScript && sessionScript.innerHTML) {
+                var sessionData = JSON.parse(sessionScript.innerHTML);
+                if (sessionData.accessToken) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'spotify', data: sessionData.accessToken }));
+                  return;
+                }
+              }
+              fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', { credentials: 'include' })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
                   if (data && data.accessToken) {
                     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'spotify', data: data.accessToken }));
                   }
                 })
-                .catch(e => {});
+                .catch(function(e) {});
             }
           } catch (e) {}
         }, 2000);
@@ -37,13 +44,11 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
     },
     youtube: {
       url: 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https://music.youtube.com/',
-      // Injects a script to grab the SAPISID cookie or YouTube Music's specific token config
       injection: `
         setInterval(function() {
           try {
             if (window.location.href.includes('music.youtube.com')) {
-              // Extract cookies which contain the auth state for yt music
-              let cookies = document.cookie;
+              var cookies = document.cookie;
               if (cookies.includes('SAPISID') && cookies.includes('LOGIN_INFO')) {
                 window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'youtube', data: cookies }));
               }
@@ -69,6 +74,17 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
     }
   }
 
+  const handleNavigationStateChange = (navState: any) => {
+    setCurrentUrl(navState.url)
+    // Dynamically inject scripts when crossing domain boundaries
+    if (navState.url.includes('open.spotify.com') && platform === 'spotify') {
+      webviewRef.current?.injectJavaScript(config.spotify.injection)
+    }
+    if (navState.url.includes('music.youtube.com') && platform === 'youtube') {
+      webviewRef.current?.injectJavaScript(config.youtube.injection)
+    }
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -82,14 +98,14 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
         source={{ uri: config[platform].url }}
         injectedJavaScript={config[platform].injection}
         onMessage={handleMessage}
-        onNavigationStateChange={(navState) => setCurrentUrl(navState.url)}
+        onNavigationStateChange={handleNavigationStateChange}
         sharedCookiesEnabled={true}
         thirdPartyCookiesEnabled={true}
         allowsProtectedMedia={true}
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback={true}
         mixedContentMode={'always'}
-        userAgent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+        userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/115.0"
         style={styles.webview}
       />
     </View>
