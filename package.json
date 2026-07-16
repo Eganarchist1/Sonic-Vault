@@ -32,7 +32,9 @@
     "react-native-worklets-core": "^1.6.3"
   },
   "devDependencies": {
+    "@babel/plugin-proposal-decorators": "^7.29.7",
     "@types/react": "~19.2.2",
+    "babel-preset-expo": "^57.0.3",
     "patch-package": "^8.0.1",
     "typescript": "~6.0.3"
   },
