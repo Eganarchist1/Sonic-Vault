@@ -5,7 +5,7 @@ module.exports = function(api) {
       ['babel-preset-expo']
     ],
     plugins: [
-      ['@babel/plugin-transform-typescript', { allowDeclareFields: true }],
+      ['@babel/plugin-transform-typescript', { isTSX: true, allExtensions: true, allowDeclareFields: true }],
       ['@babel/plugin-proposal-decorators', { legacy: true }],
       ['@babel/plugin-transform-class-properties', { loose: true }],
       ['@babel/plugin-transform-private-methods', { loose: true }],
