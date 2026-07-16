@@ -20,16 +20,21 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
         (function() {
           if (window.__TOKEN_HOOK_INSTALLED) return;
           window.__TOKEN_HOOK_INSTALLED = true;
+          window.__HAS_EXTRACTED_TOKEN = false;
           
+          function sendToken(token) {
+            if (window.__HAS_EXTRACTED_TOKEN) return;
+            window.__HAS_EXTRACTED_TOKEN = true;
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'spotify', data: token }));
+          }
+
           // Intercept XHR
           var XHR = XMLHttpRequest.prototype;
-          var open = XHR.open;
-          var send = XHR.send;
           var setRequestHeader = XHR.setRequestHeader;
           
           XHR.setRequestHeader = function(header, value) {
             if (header.toLowerCase() === 'authorization' && value.includes('Bearer ')) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'spotify', data: value.replace('Bearer ', '') }));
+              sendToken(value.replace('Bearer ', ''));
             }
             return setRequestHeader.apply(this, arguments);
           };
@@ -42,22 +47,11 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
               var headers = new Headers(args[1].headers);
               var auth = headers.get('authorization') || headers.get('Authorization');
               if (auth && auth.includes('Bearer ')) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'spotify', data: auth.replace('Bearer ', '') }));
+                sendToken(auth.replace('Bearer ', ''));
               }
             }
             return originalFetch.apply(this, args);
           };
-          
-          // Fallback session tag
-          setInterval(function() {
-            try {
-              var s = document.getElementById('session');
-              if (s && s.innerHTML) {
-                var d = JSON.parse(s.innerHTML);
-                if (d.accessToken) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'spotify', data: d.accessToken }));
-              }
-            } catch(e){}
-          }, 2000);
         })();
         true;
       `
@@ -66,10 +60,17 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
       url: 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https://music.youtube.com/',
       injection: `
         (function() {
-          // Attempt to extract cookies or wait for successful redirect
+          if (window.__TOKEN_HOOK_INSTALLED) return;
+          window.__TOKEN_HOOK_INSTALLED = true;
+          // Hide webdriver signatures
+          Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+          
           setInterval(function() {
             if (window.location.href.includes('music.youtube.com')) {
-               window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'youtube', data: 'youtube-authenticated' }));
+               if (!window.__HAS_EXTRACTED_TOKEN) {
+                 window.__HAS_EXTRACTED_TOKEN = true;
+                 window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'youtube', data: 'youtube-authenticated' }));
+               }
             }
           }, 2000);
         })();
@@ -123,7 +124,7 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback={true}
         mixedContentMode={'always'}
-        userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/115.0"
+        userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1"
         style={styles.webview}
       />
     </View>

@@ -20,6 +20,7 @@ export class SpotifyExtractor {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
+        'App-Platform': 'WebPlayer'
       }
     })
 
