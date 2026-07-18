@@ -22,8 +22,9 @@ const generateRandomString = (length: number) => {
   return text;
 };
 
-const base64urlencode = (buffer: ArrayBuffer) => {
-  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+const base64urlencode = (buffer: ArrayBuffer | Uint8Array) => {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  return btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');

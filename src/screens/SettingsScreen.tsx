@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from 'react-nativ
 import { LinearGradient } from 'expo-linear-gradient'
 import { BlurView } from 'expo-blur'
 import * as SecureStore from 'expo-secure-store'
-import { Ionicons } from '@expo/vector-icons'
+import { Ionicons, FontAwesome } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 
 import { colors } from '../theme/colors'
@@ -80,7 +80,7 @@ export const SettingsScreen = () => {
         {/* Spotify Connection */}
         <View style={styles.connectionCard}>
           <View style={styles.connectionInfo}>
-            <Ionicons name="logo-spotify" size={28} color="#1db954" />
+            <FontAwesome name="spotify" size={28} color="#1db954" />
             <Text style={styles.connectionText}>Spotify</Text>
           </View>
           {spotifyLinked ? (
@@ -97,7 +97,7 @@ export const SettingsScreen = () => {
         {/* YouTube Connection */}
         <View style={styles.connectionCard}>
           <View style={styles.connectionInfo}>
-            <Ionicons name="logo-youtube" size={28} color="#ff0000" />
+            <FontAwesome name="youtube-play" size={28} color="#ff0000" />
             <Text style={styles.connectionText}>YouTube Music</Text>
           </View>
           {youtubeLinked ? (
