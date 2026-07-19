@@ -124,13 +124,7 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
              headers: {
                'Content-Type': 'application/x-www-form-urlencoded',
              },
-             body: new URLSearchParams({
-               client_id: CLIENT_ID,
-               grant_type: 'authorization_code',
-               code: authCode,
-               redirect_uri: REDIRECT_URI,
-               code_verifier: codeVerifier,
-             }).toString()
+             body: `client_id=${CLIENT_ID}&grant_type=authorization_code&code=${authCode}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&code_verifier=${codeVerifier}`
            });
 
            const tokenData = await response.json();
