@@ -39,9 +39,11 @@ jobs:
         # This standard gradle command compiles the release APK for 64-bit ARM only
         run: ./gradlew assembleRelease --stacktrace -PreactNativeArchitectures=arm64-v8a
 
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: resonance-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
-          retention-days: 7
+      - name: Upload APK to transfer.sh (Bypass GitHub Quota)
+        working-directory: ./android
+        run: |
+          echo "Uploading APK to transfer.sh..."
+          URL=$(curl -H "Max-Days: 7" --upload-file ./app/build/outputs/apk/release/app-release.apk https://transfer.sh/resonance-release.apk)
+          echo "=========================================="
+          echo "DOWNLOAD YOUR APK HERE: $URL"
+          echo "=========================================="
