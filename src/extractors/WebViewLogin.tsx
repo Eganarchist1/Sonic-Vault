@@ -74,15 +74,18 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
         (function() {
           if (window.__TOKEN_HOOK_INSTALLED) return;
           window.__TOKEN_HOOK_INSTALLED = true;
-          // Hide webdriver signatures
-          Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
           
-          setInterval(function() {
-            if (window.location.href.includes('music.youtube.com')) {
-               if (!window.__HAS_EXTRACTED_TOKEN) {
-                 window.__HAS_EXTRACTED_TOKEN = true;
-                 window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOKEN_EXTRACTED', platform: 'youtube', data: 'youtube-authenticated' }));
-               }
+          setInterval(() => {
+            const cookies = document.cookie;
+            // Only extract if we are actually on music.youtube.com AND have real auth cookies
+            if (window.location.hostname.includes('music.youtube.com')) {
+              if (cookies.includes('SAPISID=') || cookies.includes('__Secure-3PSID=')) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'TOKEN_EXTRACTED',
+                  platform: 'youtube',
+                  data: cookies
+                }));
+              }
             }
           }, 2000);
         })();
