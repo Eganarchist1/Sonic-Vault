@@ -32,41 +32,34 @@ const base64urlencode = (buffer: ArrayBuffer | Uint8Array) => {
 
 export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess, onCancel }) => {
   const webviewRef = useRef<WebView>(null)
-  const [currentUrl, setCurrentUrl] = useState('')
-  const [spotifyUrl, setSpotifyUrl] = useState('')
-  const [codeVerifier, setCodeVerifier] = useState('')
-
-  useEffect(() => {
-    if (platform === 'spotify') {
-      const initPKCE = async () => {
-        const verifier = generateRandomString(128)
-        setCodeVerifier(verifier)
-        
-        const hashed = await Crypto.digestStringAsync(
-          Crypto.CryptoDigestAlgorithm.SHA256,
-          verifier
-        )
-        // Expo Crypto returns hex, we need base64url for PKCE
-        const hexToUint8Array = (hex: string) => {
-          const arr = new Uint8Array(hex.length / 2)
-          for (let i = 0; i < hex.length; i += 2) {
-            arr[i / 2] = parseInt(hex.substring(i, i + 2), 16)
-          }
-          return arr
-        }
-        const challenge = base64urlencode(hexToUint8Array(hashed))
-
-        const url = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&code_challenge_method=S256&code_challenge=${challenge}&scope=user-library-read%20playlist-read-private`
-        setSpotifyUrl(url)
-      }
-      initPKCE()
-    }
-  }, [platform])
-
   const config = {
     spotify: {
-      url: spotifyUrl,
-      injection: `true;`
+      url: 'https://accounts.spotify.com/login?continue=https%3A%2F%2Fopen.spotify.com%2F',
+      injection: `
+        (function() {
+          if (window.__TOKEN_HOOK_INSTALLED) return;
+          window.__TOKEN_HOOK_INSTALLED = true;
+          
+          setInterval(async () => {
+            if (window.location.hostname.includes('open.spotify.com')) {
+              try {
+                // Fetch the internal Web Player token which bypasses Developer Dashboard Premium restrictions
+                const res = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player');
+                const json = await res.json();
+                if (json.accessToken && !window.__HAS_EXTRACTED_TOKEN) {
+                  window.__HAS_EXTRACTED_TOKEN = true;
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'TOKEN_EXTRACTED',
+                    platform: 'spotify',
+                    data: json.accessToken
+                  }));
+                }
+              } catch(e) {}
+            }
+          }, 2000);
+        })();
+        true;
+      `
     },
     youtube: {
       url: 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https://music.youtube.com/',
@@ -109,48 +102,17 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
   }
 
   const handleNavigationStateChange = async (navState: any) => {
-    setCurrentUrl(navState.url)
-    
-    // Intercept Spotify PKCE Redirect
-    if (platform === 'spotify' && navState.url.includes('developer.spotify.com') && navState.url.includes('code=')) {
-      try {
-        const codeMatch = navState.url.match(/[?&]code=([^&]*)/);
-        if (codeMatch && codeMatch[1]) {
-          const authCode = codeMatch[1];
-          console.log('Intercepted Auth Code, exchanging for token...');
-          
-          const response = await fetch('https://accounts.spotify.com/api/token', {
-             method: 'POST',
-             headers: {
-               'Content-Type': 'application/x-www-form-urlencoded',
-             },
-             body: `client_id=${CLIENT_ID}&grant_type=authorization_code&code=${authCode}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&code_verifier=${codeVerifier}`
-           });
-
-           const tokenData = await response.json();
-
-           if (tokenData.access_token) {
-              await SecureStore.setItemAsync('RES_SPOTIFY_EXTRACTED_TOKEN', tokenData.access_token);
-              console.log('Successfully extracted OFFICIAL Spotify PKCE OAuth token');
-              onSuccess();
-           } else {
-              console.error('Failed to exchange PKCE code for token', tokenData)
-           }
-          return;
-        }
-      } catch (e) {
-        console.error('Failed to extract Spotify token from URL redirect', e);
-      }
-    }
+    // Spotify interception is now handled purely by the injected JavaScript on open.spotify.com
 
     if (navState.url.includes('music.youtube.com') && platform === 'youtube') {
       webviewRef.current?.injectJavaScript(config.youtube.injection)
     }
+    if (navState.url.includes('open.spotify.com') && platform === 'spotify') {
+      webviewRef.current?.injectJavaScript(config.spotify.injection)
+    }
   }
 
-  if (platform === 'spotify' && !spotifyUrl) {
-    return <View style={styles.container} />
-  }
+    // No loading screen needed anymore since we hardcoded the URL
 
   return (
     <View style={styles.container}>
