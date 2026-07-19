@@ -40,21 +40,18 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
           if (window.__TOKEN_HOOK_INSTALLED) return;
           window.__TOKEN_HOOK_INSTALLED = true;
           
-          setInterval(async () => {
+          setInterval(() => {
             if (window.location.hostname.includes('open.spotify.com')) {
-              try {
-                // Fetch the internal Web Player token which bypasses Developer Dashboard Premium restrictions
-                const res = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player');
-                const json = await res.json();
-                if (json.accessToken && !window.__HAS_EXTRACTED_TOKEN) {
-                  window.__HAS_EXTRACTED_TOKEN = true;
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'TOKEN_EXTRACTED',
-                    platform: 'spotify',
-                    data: json.accessToken
-                  }));
-                }
-              } catch(e) {}
+              const cookies = document.cookie;
+              const spDcMatch = cookies.match(/sp_dc=([^;]+)/);
+              if (spDcMatch && spDcMatch[1] && !window.__HAS_EXTRACTED_TOKEN) {
+                window.__HAS_EXTRACTED_TOKEN = true;
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'TOKEN_EXTRACTED',
+                  platform: 'spotify',
+                  data: spDcMatch[1]
+                }));
+              }
             }
           }, 2000);
         })();

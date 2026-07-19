@@ -12,7 +12,21 @@ export class SpotifyExtractor {
    * Fetches the user's Liked Songs using the internal web API structure.
    */
   static async getLikedSongs(): Promise<RemotePlaylist> {
-    const token = await this.getExtractedToken()
+    const spDcCookie = await this.getExtractedToken()
+    
+    // First, fetch a fresh Web Player access token using the sp_dc cookie
+    const tokenResponse = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
+      headers: {
+        'Cookie': `sp_dc=${spDcCookie}`
+      }
+    });
+
+    if (!tokenResponse.ok) {
+      throw new Error(`Failed to fetch internal Web Player token: ${tokenResponse.status}`);
+    }
+
+    const tokenData = await tokenResponse.json();
+    const token = tokenData.accessToken;
     
     // Internal Spotify Web APIs often use standard Bearer auth but different endpoints or standard ones 
     // if the token is valid for open.spotify.com

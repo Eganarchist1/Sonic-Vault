@@ -14,6 +14,7 @@ import { colors } from '../theme/colors'
 import { useNavigation } from '@react-navigation/native'
 import { SyncManager } from '../sync/SyncManager'
 import { SpotifyExtractor } from '../extractors/SpotifyExtractor'
+import { YouTubeExtractor } from '../extractors/YouTubeExtractor'
 
 interface DashboardProps {
   tracks: Track[]
@@ -28,9 +29,36 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
   const handleSync = async () => {
     try {
       setIsSyncing(true)
-      const playlist = await SpotifyExtractor.getLikedSongs()
-      await SyncManager.syncPlaylist(playlist)
-      alert('Sync completed successfully!')
+      let syncedCount = 0;
+
+      const spotifyToken = await SecureStore.getItemAsync('RES_SPOTIFY_EXTRACTED_TOKEN');
+      if (spotifyToken) {
+        try {
+          const playlist = await SpotifyExtractor.getLikedSongs();
+          await SyncManager.syncPlaylist(playlist);
+          syncedCount++;
+        } catch(e: any) {
+          alert(`Spotify Sync Error: ${e.message}`);
+        }
+      }
+
+      const youtubeToken = await SecureStore.getItemAsync('RES_YOUTUBE_EXTRACTED_COOKIE');
+      if (youtubeToken) {
+        try {
+          // 'LM' is the standard Liked Music playlist ID on YouTube
+          const playlist = await YouTubeExtractor.getPlaylist('LM');
+          await SyncManager.syncPlaylist(playlist);
+          syncedCount++;
+        } catch(e: any) {
+          alert(`YouTube Sync Error: ${e.message}`);
+        }
+      }
+
+      if (syncedCount > 0) {
+        alert('Sync completed successfully!');
+      } else if (!spotifyToken && !youtubeToken) {
+        alert('Please connect an account in Settings first.');
+      }
     } catch (e: any) {
       alert(e.message || 'Error syncing library')
     } finally {
