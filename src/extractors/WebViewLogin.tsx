@@ -42,15 +42,20 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
           
           setInterval(() => {
             if (window.location.hostname.includes('open.spotify.com')) {
-              const cookies = document.cookie;
-              const spDcMatch = cookies.match(/sp_dc=([^;]+)/);
-              if (spDcMatch && spDcMatch[1] && !window.__HAS_EXTRACTED_TOKEN) {
-                window.__HAS_EXTRACTED_TOKEN = true;
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'TOKEN_EXTRACTED',
-                  platform: 'spotify',
-                  data: spDcMatch[1]
-                }));
+              // The web player embeds the master token directly in the HTML!
+              const sessionNode = document.getElementById('session');
+              if (sessionNode && sessionNode.innerHTML.includes('accessToken') && !window.__HAS_EXTRACTED_TOKEN) {
+                try {
+                  const sessionData = JSON.parse(sessionNode.innerHTML);
+                  if (sessionData.accessToken) {
+                    window.__HAS_EXTRACTED_TOKEN = true;
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                      type: 'TOKEN_EXTRACTED',
+                      platform: 'spotify',
+                      data: sessionData.accessToken
+                    }));
+                  }
+                } catch(e) {}
               }
             }
           }, 2000);
@@ -131,7 +136,7 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback={true}
         mixedContentMode={'always'}
-        userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1"
+        userAgent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
         style={styles.webview}
       />
     </View>
