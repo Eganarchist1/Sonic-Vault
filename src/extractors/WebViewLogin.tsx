@@ -40,25 +40,46 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
           if (window.__TOKEN_HOOK_INSTALLED) return;
           window.__TOKEN_HOOK_INSTALLED = true;
           
-          setInterval(() => {
-            if (window.location.hostname.includes('open.spotify.com')) {
-              // The web player embeds the master token directly in the HTML!
-              const sessionNode = document.getElementById('session');
-              if (sessionNode && sessionNode.innerHTML.includes('accessToken') && !window.__HAS_EXTRACTED_TOKEN) {
-                try {
-                  const sessionData = JSON.parse(sessionNode.innerHTML);
-                  if (sessionData.accessToken) {
-                    window.__HAS_EXTRACTED_TOKEN = true;
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'TOKEN_EXTRACTED',
-                      platform: 'spotify',
-                      data: sessionData.accessToken
-                    }));
-                  }
-                } catch(e) {}
+          const originalFetch = window.fetch;
+          window.fetch = async function(...args) {
+             const url = args[0];
+             const options = args[1];
+             if (options && options.headers && (typeof url === 'string' && (url.includes('api.spotify.com') || url.includes('spclient.wg.spotify.com')))) {
+                 let authHeader = '';
+                 if (options.headers instanceof Headers) {
+                     authHeader = options.headers.get('authorization') || options.headers.get('Authorization') || '';
+                 } else {
+                     authHeader = options.headers['authorization'] || options.headers['Authorization'] || '';
+                 }
+                 if (authHeader && authHeader.includes('Bearer ') && !window.__HAS_EXTRACTED_TOKEN) {
+                     window.__HAS_EXTRACTED_TOKEN = true;
+                     window.ReactNativeWebView.postMessage(JSON.stringify({
+                       type: 'TOKEN_EXTRACTED',
+                       platform: 'spotify',
+                       data: authHeader.replace('Bearer ', '')
+                     }));
+                 }
+             }
+             return originalFetch.apply(this, args);
+          };
+
+          const originalXHR = window.XMLHttpRequest.prototype.open;
+          window.XMLHttpRequest.prototype.open = function(method, url) {
+              this._url = url;
+              return originalXHR.apply(this, arguments);
+          };
+          const originalSetRequestHeader = window.XMLHttpRequest.prototype.setRequestHeader;
+          window.XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
+              if (header.toLowerCase() === 'authorization' && value.includes('Bearer ') && !window.__HAS_EXTRACTED_TOKEN) {
+                  window.__HAS_EXTRACTED_TOKEN = true;
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                       type: 'TOKEN_EXTRACTED',
+                       platform: 'spotify',
+                       data: value.replace('Bearer ', '')
+                  }));
               }
-            }
-          }, 2000);
+              return originalSetRequestHeader.apply(this, arguments);
+          };
         })();
         true;
       `
@@ -93,7 +114,10 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
     try {
       const parsed = JSON.parse(event.nativeEvent.data)
       if (parsed.type === 'TOKEN_EXTRACTED') {
-        const key = parsed.platform === 'spotify' ? 'RES_SPOTIFY_EXTRACTED_TOKEN' : 'RES_YOUTUBE_EXTRACTED_COOKIE'
+        const key = parsed.platform === 'spotify' 
+          ? 'RES_SPOTIFY_EXTRACTED_TOKEN' 
+          : 'RES_YOUTUBE_EXTRACTED_COOKIE'
+        
         await SecureStore.setItemAsync(key, parsed.data)
         console.log(`Successfully extracted and saved token for ${parsed.platform}`)
         onSuccess()
@@ -136,7 +160,7 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback={true}
         mixedContentMode={'always'}
-        userAgent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+        userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1"
         style={styles.webview}
       />
     </View>
