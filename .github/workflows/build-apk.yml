@@ -8,6 +8,8 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -39,11 +41,9 @@ jobs:
         # This standard gradle command compiles the release APK for 64-bit ARM only
         run: ./gradlew assembleRelease --stacktrace -PreactNativeArchitectures=arm64-v8a
 
-      - name: Upload APK to transfer.sh (Bypass GitHub Quota)
-        working-directory: ./android
+      - name: Create GitHub Release and Upload APK
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Uploading APK to transfer.sh..."
-          URL=$(curl -H "Max-Days: 7" --upload-file ./app/build/outputs/apk/release/app-release.apk https://transfer.sh/resonance-release.apk)
-          echo "=========================================="
-          echo "DOWNLOAD YOUR APK HERE: $URL"
-          echo "=========================================="
+          TAG_NAME="build-$(date +%s)"
+          gh release create "$TAG_NAME" ./android/app/build/outputs/apk/release/app-release.apk --title "Sonic Vault APK ($TAG_NAME)" --notes "Automated APK build with valid Spotify Client ID"
