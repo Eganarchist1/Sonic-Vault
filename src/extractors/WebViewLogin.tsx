@@ -10,7 +10,7 @@ interface WebViewLoginProps {
   onCancel: () => void
 }
 
-const CLIENT_ID = '8a8ce1c224b94e2289c656d0f1eb0789'
+const CLIENT_ID = '11d0c6def52f48578a4082ff21deb13c'
 const REDIRECT_URI = 'https://developer.spotify.com/'
 
 const generateRandomString = (length: number) => {
