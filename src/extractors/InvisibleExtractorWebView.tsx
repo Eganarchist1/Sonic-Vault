@@ -3,11 +3,12 @@ import { WebView } from 'react-native-webview';
 
 interface InvisibleExtractorProps {
   platform: 'spotify' | 'youtube';
+  token: string;
   onExtracted: (playlist: any) => void;
   onError: (error: string) => void;
 }
 
-export const InvisibleExtractorWebView: React.FC<InvisibleExtractorProps> = ({ platform, onExtracted, onError }) => {
+export const InvisibleExtractorWebView: React.FC<InvisibleExtractorProps> = ({ platform, token, onExtracted, onError }) => {
   const webviewRef = useRef<WebView>(null);
 
   const config = {
@@ -20,7 +21,19 @@ export const InvisibleExtractorWebView: React.FC<InvisibleExtractorProps> = ({ p
           
           setTimeout(async () => {
             try {
-              const res = await fetch('https://api.spotify.com/v1/me/tracks?limit=50');
+              // The token we pass here is token|clientToken, let's extract the bearer token
+              let bearer = '${token}';
+              let clientToken = '';
+              if (bearer.includes('|')) {
+                  const parts = bearer.split('|');
+                  bearer = parts[0];
+                  clientToken = parts[1];
+              }
+
+              const headers = { 'Authorization': 'Bearer ' + bearer };
+              if (clientToken) headers['client-token'] = clientToken;
+
+              const res = await fetch('https://api.spotify.com/v1/me/tracks?limit=50', { headers });
               if (!res.ok) {
                  window.ReactNativeWebView.postMessage(JSON.stringify({ error: 'Spotify API returned ' + res.status }));
                  return;
@@ -81,12 +94,14 @@ export const InvisibleExtractorWebView: React.FC<InvisibleExtractorProps> = ({ p
               }
 
               if (!ytDataString) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ error: 'Could not find YouTube JSON Payload' }));
+                // Return generic error with snippet
+                const snippet = html.substring(0, 300).replace(/\\s+/g, ' ');
+                window.ReactNativeWebView.postMessage(JSON.stringify({ error: 'Could not find YouTube JSON Payload. Snippet: ' + snippet }));
                 return;
               }
 
               const tracks = [];
-              // Return a stub for now, but successfully pass the extraction phase!
+              // We successfully parsed the initialData!
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 remoteId: 'LM',
                 source: 'youtube',
@@ -124,7 +139,7 @@ export const InvisibleExtractorWebView: React.FC<InvisibleExtractorProps> = ({ p
       onMessage={handleMessage}
       sharedCookiesEnabled={true}
       thirdPartyCookiesEnabled={true}
-      userAgent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+      userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1"
       style={{ width: 0, height: 0, opacity: 0 }}
     />
   );

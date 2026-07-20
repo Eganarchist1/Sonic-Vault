@@ -30,6 +30,8 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
 
   const [syncingSpotify, setSyncingSpotify] = useState(false)
   const [syncingYoutube, setSyncingYoutube] = useState(false)
+  const [spotifyTokenData, setSpotifyTokenData] = useState('')
+  const [youtubeTokenData, setYoutubeTokenData] = useState('')
 
   const handleSync = async () => {
     try {
@@ -44,8 +46,14 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
         return;
       }
 
-      if (spotifyToken) setSyncingSpotify(true);
-      if (youtubeToken) setSyncingYoutube(true);
+      if (spotifyToken) {
+        setSpotifyTokenData(spotifyToken);
+        setSyncingSpotify(true);
+      }
+      if (youtubeToken) {
+        setYoutubeTokenData(youtubeToken);
+        setSyncingYoutube(true);
+      }
     } catch (e: any) {
       alert(e.message || 'Error starting sync')
       setIsSyncing(false)
@@ -184,6 +192,7 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
       {syncingSpotify && (
         <InvisibleExtractorWebView
           platform="spotify"
+          token={spotifyTokenData}
           onExtracted={handleSpotifyExtracted}
           onError={(e) => handleExtractorError('Spotify', e)}
         />
@@ -191,6 +200,7 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
       {syncingYoutube && (
         <InvisibleExtractorWebView
           platform="youtube"
+          token={youtubeTokenData}
           onExtracted={handleYoutubeExtracted}
           onError={(e) => handleExtractorError('YouTube', e)}
         />
