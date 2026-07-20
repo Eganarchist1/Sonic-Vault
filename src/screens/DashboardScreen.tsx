@@ -16,6 +16,8 @@ import { SyncManager } from '../sync/SyncManager'
 import { SpotifyExtractor } from '../extractors/SpotifyExtractor'
 import { YouTubeExtractor } from '../extractors/YouTubeExtractor'
 
+import { InvisibleExtractorWebView } from '../extractors/InvisibleExtractorWebView'
+
 interface DashboardProps {
   tracks: Track[]
 }
@@ -26,44 +28,69 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
   const activeTrack = useActiveTrack()
   const [isSyncing, setIsSyncing] = useState(false)
 
+  const [syncingSpotify, setSyncingSpotify] = useState(false)
+  const [syncingYoutube, setSyncingYoutube] = useState(false)
+
   const handleSync = async () => {
     try {
       setIsSyncing(true)
-      let syncedCount = 0;
 
       const spotifyToken = await SecureStore.getItemAsync('RES_SPOTIFY_EXTRACTED_TOKEN');
-      if (spotifyToken) {
-        try {
-          const playlist = await SpotifyExtractor.getLikedSongs();
-          await SyncManager.syncPlaylist(playlist);
-          syncedCount++;
-        } catch(e: any) {
-          alert(`Spotify Sync Error: ${e.message}`);
-        }
-      }
-
       const youtubeToken = await SecureStore.getItemAsync('RES_YOUTUBE_EXTRACTED_COOKIE');
-      if (youtubeToken) {
-        try {
-          // 'LM' is the standard Liked Music playlist ID on YouTube
-          const playlist = await YouTubeExtractor.getPlaylist('LM');
-          await SyncManager.syncPlaylist(playlist);
-          syncedCount++;
-        } catch(e: any) {
-          alert(`YouTube Sync Error: ${e.message}`);
-        }
+      
+      if (!spotifyToken && !youtubeToken) {
+        alert('Please connect an account in Settings first.');
+        setIsSyncing(false);
+        return;
       }
 
-      if (syncedCount > 0) {
-        alert('Sync completed successfully!');
-      } else if (!spotifyToken && !youtubeToken) {
-        alert('Please connect an account in Settings first.');
-      }
+      if (spotifyToken) setSyncingSpotify(true);
+      if (youtubeToken) setSyncingYoutube(true);
     } catch (e: any) {
-      alert(e.message || 'Error syncing library')
-    } finally {
+      alert(e.message || 'Error starting sync')
       setIsSyncing(false)
     }
+  }
+
+  const handleSpotifyExtracted = async (playlist: any) => {
+    try {
+      await SyncManager.syncPlaylist(playlist);
+      setSyncingSpotify(false);
+      if (!syncingYoutube) {
+        alert('Sync completed successfully!');
+        setIsSyncing(false);
+      }
+    } catch(e: any) {
+      alert(`Spotify Save Error: ${e.message}`);
+      setSyncingSpotify(false);
+      if (!syncingYoutube) setIsSyncing(false);
+    }
+  }
+
+  const handleYoutubeExtracted = async (playlist: any) => {
+    try {
+      await SyncManager.syncPlaylist(playlist);
+      setSyncingYoutube(false);
+      if (!syncingSpotify) {
+        alert('Sync completed successfully!');
+        setIsSyncing(false);
+      }
+    } catch(e: any) {
+      alert(`YouTube Save Error: ${e.message}`);
+      setSyncingYoutube(false);
+      if (!syncingSpotify) setIsSyncing(false);
+    }
+  }
+
+  const handleExtractorError = (platform: string, error: string) => {
+    alert(`${platform} Sync Error: ${error}`);
+    if (platform === 'Spotify') setSyncingSpotify(false);
+    if (platform === 'YouTube') setSyncingYoutube(false);
+    
+    // We can't synchronously check the other state here due to closures,
+    // but the next render will clean up setIsSyncing if both are false.
+    // For simplicity, we just stop the global spinner
+    setIsSyncing(false);
   }
 
   const handlePlayTrack = async (track: Track) => {
@@ -152,6 +179,21 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
             </TouchableOpacity>
           </View>
         </BlurView>
+      )}
+
+      {syncingSpotify && (
+        <InvisibleExtractorWebView
+          platform="spotify"
+          onExtracted={handleSpotifyExtracted}
+          onError={(e) => handleExtractorError('Spotify', e)}
+        />
+      )}
+      {syncingYoutube && (
+        <InvisibleExtractorWebView
+          platform="youtube"
+          onExtracted={handleYoutubeExtracted}
+          onError={(e) => handleExtractorError('YouTube', e)}
+        />
       )}
     </View>
   )

@@ -17,7 +17,7 @@ export class YouTubeExtractor {
     const response = await fetch(`https://music.youtube.com/playlist?list=${playlistId}`, {
       headers: {
         'Cookie': cookies,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1',
         'Accept-Language': 'en-US,en;q=0.9',
       }
     })
@@ -55,14 +55,15 @@ export class YouTubeExtractor {
     }
 
     if (!ytDataString) {
-      throw new Error("Could not parse ytInitialData from YouTube Music HTML. The DOM structure may have changed.");
+      const snippet = html.substring(0, 300).replace(/\s+/g, ' ');
+      throw new Error(`YouTube Parse Error. HTML snippet: ${snippet}`);
     }
 
     let ytData;
     try {
       ytData = JSON.parse(ytDataString);
     } catch (e) {
-      throw new Error("Failed to parse YouTube JSON payload string.");
+      throw new Error(`Failed to parse YouTube JSON. HTML snippet: ${html.substring(0, 300).replace(/\s+/g, ' ')}`);
     }
     
     // Note: Parsing ytInitialData requires complex traversal.

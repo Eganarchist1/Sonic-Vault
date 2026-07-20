@@ -40,25 +40,33 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
           if (window.__TOKEN_HOOK_INSTALLED) return;
           window.__TOKEN_HOOK_INSTALLED = true;
           
+          let capturedAuth = '';
+          let capturedClient = '';
+
+          function checkAndSend() {
+             if (capturedAuth && capturedClient && !window.__HAS_EXTRACTED_TOKEN) {
+                 window.__HAS_EXTRACTED_TOKEN = true;
+                 window.ReactNativeWebView.postMessage(JSON.stringify({
+                   type: 'TOKEN_EXTRACTED',
+                   platform: 'spotify',
+                   data: capturedAuth.replace('Bearer ', '') + '|' + capturedClient
+                 }));
+             }
+          }
+
           const originalFetch = window.fetch;
           window.fetch = async function(...args) {
              const url = args[0];
              const options = args[1];
              if (options && options.headers && (typeof url === 'string' && (url.includes('api.spotify.com') || url.includes('spclient.wg.spotify.com')))) {
-                 let authHeader = '';
                  if (options.headers instanceof Headers) {
-                     authHeader = options.headers.get('authorization') || options.headers.get('Authorization') || '';
+                     capturedAuth = options.headers.get('authorization') || options.headers.get('Authorization') || capturedAuth;
+                     capturedClient = options.headers.get('client-token') || options.headers.get('Client-Token') || capturedClient;
                  } else {
-                     authHeader = options.headers['authorization'] || options.headers['Authorization'] || '';
+                     capturedAuth = options.headers['authorization'] || options.headers['Authorization'] || capturedAuth;
+                     capturedClient = options.headers['client-token'] || options.headers['Client-Token'] || capturedClient;
                  }
-                 if (authHeader && authHeader.includes('Bearer ') && !window.__HAS_EXTRACTED_TOKEN) {
-                     window.__HAS_EXTRACTED_TOKEN = true;
-                     window.ReactNativeWebView.postMessage(JSON.stringify({
-                       type: 'TOKEN_EXTRACTED',
-                       platform: 'spotify',
-                       data: authHeader.replace('Bearer ', '')
-                     }));
-                 }
+                 checkAndSend();
              }
              return originalFetch.apply(this, args);
           };
@@ -70,14 +78,13 @@ export const WebViewLogin: React.FC<WebViewLoginProps> = ({ platform, onSuccess,
           };
           const originalSetRequestHeader = window.XMLHttpRequest.prototype.setRequestHeader;
           window.XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
-              if (header.toLowerCase() === 'authorization' && value.includes('Bearer ') && !window.__HAS_EXTRACTED_TOKEN) {
-                  window.__HAS_EXTRACTED_TOKEN = true;
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                       type: 'TOKEN_EXTRACTED',
-                       platform: 'spotify',
-                       data: value.replace('Bearer ', '')
-                  }));
+              if (header.toLowerCase() === 'authorization' && value.includes('Bearer ')) {
+                  capturedAuth = value;
               }
+              if (header.toLowerCase() === 'client-token') {
+                  capturedClient = value;
+              }
+              checkAndSend();
               return originalSetRequestHeader.apply(this, arguments);
           };
         })();
