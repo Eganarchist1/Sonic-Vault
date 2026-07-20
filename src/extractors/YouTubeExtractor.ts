@@ -14,10 +14,6 @@ export class YouTubeExtractor {
   static async getPlaylist(playlistId: string): Promise<RemotePlaylist> {
     const cookies = await this.getExtractedCookies()
     
-    // YouTube Music internal API payload requires grabbing the INNERTUBE_API_KEY from the DOM
-    // and sending a specific JSON payload. For demonstration, we assume we fetch the raw HTML
-    // and extract the ytInitialData JSON payload which contains the initial playlist state.
-
     const response = await fetch(`https://music.youtube.com/playlist?list=${playlistId}`, {
       headers: {
         'Cookie': cookies,
@@ -32,20 +28,29 @@ export class YouTubeExtractor {
 
     const html = await response.text()
     
-    // Naive DOM scraping for the internal JSON state
+    // Robust DOM scraping for the internal JSON state
     let ytDataString = '';
-    const match1 = html.match(/ytInitialData\s*=\s*(\{.*?\});\s*<\/script>/s);
-    if (match1 && match1[1]) {
-      ytDataString = match1[1];
-    } else {
-      const match2 = html.match(/window\["ytInitialData"\]\s*=\s*(\{.*?\});\s*<\/script>/s);
-      if (match2 && match2[1]) {
-        ytDataString = match2[1];
-      } else if (html.includes('ytInitialData = ')) {
-        const parts = html.split('ytInitialData = ');
-        if (parts.length > 1) {
-          ytDataString = parts[1].split(';</script>')[0];
-        }
+    
+    // Format 1: var initialData = JSON.parse('...'); (Modern YouTube Music)
+    const parseString = "var initialData = JSON.parse('";
+    if (html.includes(parseString)) {
+      const rawString = html.split(parseString)[1].split("');")[0];
+      // Unescape hex \x22 and double backslashes
+      const unescaped = rawString.replace(/\\x([0-9a-fA-F]{2})/g, (match, p1) => String.fromCharCode(parseInt(p1, 16))).replace(/\\\\/g, '\\');
+      ytDataString = unescaped;
+    }
+    // Format 2: ytInitialData = {...};
+    else if (html.includes('ytInitialData = ')) {
+      const parts = html.split('ytInitialData = ');
+      if (parts.length > 1) {
+        ytDataString = parts[1].split(';</script>')[0];
+      }
+    }
+    // Format 3: window["ytInitialData"] = {...};
+    else if (html.includes('window["ytInitialData"] = ')) {
+      const parts = html.split('window["ytInitialData"] = ');
+      if (parts.length > 1) {
+        ytDataString = parts[1].split(';</script>')[0];
       }
     }
 
@@ -53,7 +58,12 @@ export class YouTubeExtractor {
       throw new Error("Could not parse ytInitialData from YouTube Music HTML. The DOM structure may have changed.");
     }
 
-    const ytData = JSON.parse(ytDataString);
+    let ytData;
+    try {
+      ytData = JSON.parse(ytDataString);
+    } catch (e) {
+      throw new Error("Failed to parse YouTube JSON payload string.");
+    }
     
     // Note: Parsing ytInitialData requires complex traversal.
     // This is a stub showing where the parsed mapping would occur.

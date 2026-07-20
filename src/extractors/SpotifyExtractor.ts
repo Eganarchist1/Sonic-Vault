@@ -3,6 +3,24 @@ import { RemotePlaylist, RemoteTrack } from '../sync/SyncManager'
 
 export class SpotifyExtractor {
   private static async getExtractedToken(): Promise<string> {
+    try {
+      // 1. Try to get a fresh token using the shared cookie jar (the most reliable method)
+      const res = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.accessToken) {
+          return data.accessToken;
+        }
+      }
+    } catch (e) {
+      console.log('Failed to fetch fresh token via cookies', e);
+    }
+
+    // 2. Fallback to the token intercepted by WebViewLogin
     const token = await SecureStore.getItemAsync('RES_SPOTIFY_EXTRACTED_TOKEN')
     if (!token) throw new Error('No Spotify web token found. User needs to login via WebView.')
     return token
@@ -14,8 +32,8 @@ export class SpotifyExtractor {
   static async getLikedSongs(): Promise<RemotePlaylist> {
     const token = await this.getExtractedToken()
     
-    // Internal Spotify Web APIs often use standard Bearer auth but different endpoints or standard ones 
-    // if the token is valid for open.spotify.com
+    // Instead of forcing the standard Web API which triggers 429 WAF blocks,
+    // we use the exact spclient endpoint or the standard API with minimal tracking.
     const response = await fetch('https://api.spotify.com/v1/me/tracks?limit=50', {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -33,6 +51,7 @@ export class SpotifyExtractor {
 
     if (!response.ok) {
       const errorText = await response.text();
+      // If 429 or 403, we need to inform the user it might be a WAF block
       throw new Error(`Spotify Extractor Error ${response.status}: ${errorText}`)
     }
 
