@@ -33,14 +33,27 @@ export class YouTubeExtractor {
     const html = await response.text()
     
     // Naive DOM scraping for the internal JSON state
-    const dataRegex = /window\["ytInitialData"\] = ({.*?});/
-    const match = html.match(dataRegex)
-
-    if (!match || !match[1]) {
-      throw new Error("Could not parse ytInitialData from YouTube Music HTML.")
+    let ytDataString = '';
+    const match1 = html.match(/ytInitialData\s*=\s*(\{.*?\});\s*<\/script>/s);
+    if (match1 && match1[1]) {
+      ytDataString = match1[1];
+    } else {
+      const match2 = html.match(/window\["ytInitialData"\]\s*=\s*(\{.*?\});\s*<\/script>/s);
+      if (match2 && match2[1]) {
+        ytDataString = match2[1];
+      } else if (html.includes('ytInitialData = ')) {
+        const parts = html.split('ytInitialData = ');
+        if (parts.length > 1) {
+          ytDataString = parts[1].split(';</script>')[0];
+        }
+      }
     }
 
-    const ytData = JSON.parse(match[1])
+    if (!ytDataString) {
+      throw new Error("Could not parse ytInitialData from YouTube Music HTML. The DOM structure may have changed.");
+    }
+
+    const ytData = JSON.parse(ytDataString);
     
     // Note: Parsing ytInitialData requires complex traversal.
     // This is a stub showing where the parsed mapping would occur.

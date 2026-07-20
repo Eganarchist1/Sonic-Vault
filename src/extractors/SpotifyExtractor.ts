@@ -19,7 +19,15 @@ export class SpotifyExtractor {
     const response = await fetch('https://api.spotify.com/v1/me/tracks?limit=50', {
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'App-Platform': 'WebPlayer',
+        'Origin': 'https://open.spotify.com',
+        'Referer': 'https://open.spotify.com/',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-site'
       }
     })
 
