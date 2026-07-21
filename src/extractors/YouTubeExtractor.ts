@@ -1,83 +1,80 @@
-import * as SecureStore from 'expo-secure-store'
-import { RemotePlaylist, RemoteTrack } from '../sync/SyncManager'
+import * as Crypto from 'expo-crypto';
 
 export class YouTubeExtractor {
-  private static async getExtractedCookies(): Promise<string> {
-    const cookies = await SecureStore.getItemAsync('RES_YOUTUBE_EXTRACTED_COOKIE')
-    if (!cookies) throw new Error('No YouTube Music cookies found. User needs to login via WebView.')
-    return cookies
-  }
-
-  /**
-   * Scrapes a YouTube Music playlist by pretending to be the browser.
-   */
-  static async getPlaylist(playlistId: string): Promise<RemotePlaylist> {
-    const cookies = await this.getExtractedCookies()
+  static async getPlaylist(playlistId: string, cookies: string): Promise<any> {
+    const sapisidMatch = cookies.match(/SAPISID=([^;]+)/);
+    if (!sapisidMatch) throw new Error("No SAPISID cookie found for YouTube.");
+    const sapisid = sapisidMatch[1];
     
-    const response = await fetch(`https://music.youtube.com/playlist?list=${playlistId}`, {
+    const time = Math.floor(Date.now() / 1000);
+    const str = `${time} ${sapisid} https://music.youtube.com`;
+    const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA1, str);
+    const authHeader = `SAPISIDHASH ${time}_${hash}`;
+
+    const payload = {
+      context: {
+        client: {
+          clientName: "WEB_REMIX",
+          clientVersion: "1.20230522.01.00",
+          hl: "en",
+        }
+      },
+      browseId: "FEmusic_liked_videos"
+    };
+
+    const response = await fetch('https://music.youtube.com/youtubei/v1/browse', {
+      method: 'POST',
       headers: {
-        'Cookie': cookies,
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1',
-        'Accept-Language': 'en-US,en;q=0.9',
-      }
-    })
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+        'Origin': 'https://music.youtube.com',
+        'Cookie': cookies
+      },
+      body: JSON.stringify(payload)
+    });
 
     if (!response.ok) {
-      throw new Error(`YouTube Extractor Error: ${response.status}`)
+        throw new Error(`YouTube API returned ${response.status}`);
     }
 
-    const html = await response.text()
+    const data = await response.json();
     
-    // Robust DOM scraping for the internal JSON state
-    let ytDataString = '';
-    
-    // Format 1: var initialData = JSON.parse('...'); (Modern YouTube Music)
-    const parseString = "var initialData = JSON.parse('";
-    if (html.includes(parseString)) {
-      const rawString = html.split(parseString)[1].split("');")[0];
-      // Unescape hex \x22 and double backslashes
-      const unescaped = rawString.replace(/\\x([0-9a-fA-F]{2})/g, (match, p1) => String.fromCharCode(parseInt(p1, 16))).replace(/\\\\/g, '\\');
-      ytDataString = unescaped;
-    }
-    // Format 2: ytInitialData = {...};
-    else if (html.includes('ytInitialData = ')) {
-      const parts = html.split('ytInitialData = ');
-      if (parts.length > 1) {
-        ytDataString = parts[1].split(';</script>')[0];
-      }
-    }
-    // Format 3: window["ytInitialData"] = {...};
-    else if (html.includes('window["ytInitialData"] = ')) {
-      const parts = html.split('window["ytInitialData"] = ');
-      if (parts.length > 1) {
-        ytDataString = parts[1].split(';</script>')[0];
-      }
-    }
-
-    if (!ytDataString) {
-      const snippet = html.substring(0, 300).replace(/\s+/g, ' ');
-      throw new Error(`YouTube Parse Error. HTML snippet: ${snippet}`);
-    }
-
-    let ytData;
+    // Parse the innerTube API response
+    const tracks: any[] = [];
     try {
-      ytData = JSON.parse(ytDataString);
+      // The liked music list is usually inside a TwoColumnBrowseResultsRenderer or SingleColumnBrowseResultsRenderer
+      const tabs = data.contents?.singleColumnBrowseResultsRenderer?.tabs || data.contents?.twoColumnBrowseResultsRenderer?.tabs || [];
+      const playlistContents = tabs[0]?.tabRenderer?.content?.sectionListRenderer?.contents[0]?.musicPlaylistShelfRenderer?.contents || [];
+
+      playlistContents.forEach((item: any) => {
+        const renderer = item.musicResponsiveListItemRenderer;
+        if (renderer) {
+          const title = renderer.flexColumns[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs[0]?.text;
+          const artist = renderer.flexColumns[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs[0]?.text;
+          const remoteId = renderer.playlistItemData?.videoId;
+          
+          if (title && remoteId) {
+            tracks.push({
+              remoteId,
+              source: 'youtube',
+              title,
+              artist: artist || 'Unknown Artist',
+              artworkUrl: renderer.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails[0]?.url,
+              duration: 0 // Duration parsing omitted for brevity
+            });
+          }
+        }
+      });
     } catch (e) {
-      throw new Error(`Failed to parse YouTube JSON. HTML snippet: ${html.substring(0, 300).replace(/\s+/g, ' ')}`);
+      console.error("YouTube JSON parsing error", e);
+      throw new Error("Failed to parse YouTube JSON. The API structure may have changed.");
     }
-    
-    // Note: Parsing ytInitialData requires complex traversal.
-    // This is a stub showing where the parsed mapping would occur.
-    const tracks: RemoteTrack[] = []
-    
-    // Extract playlist name
-    const playlistName = "Scraped YouTube Playlist" // ytData.header.musicPlaylistHeaderRenderer.title.runs[0].text
 
     return {
-      remoteId: playlistId,
+      remoteId: 'LM',
       source: 'youtube',
-      name: playlistName,
+      name: 'Liked Music',
       tracks
-    }
+    };
   }
 }

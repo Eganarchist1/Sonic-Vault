@@ -32,22 +32,21 @@ export class SpotifyExtractor {
       'Sec-Fetch-Mode': 'cors',
       'Sec-Fetch-Site': 'same-site'
     };
+    if (clientToken) headers['client-token'] = clientToken;
 
-    if (clientToken) {
-      headers['client-token'] = clientToken;
-    }
-
-    const response = await fetch('https://api.spotify.com/v1/me/tracks?limit=50', { headers })
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      // If 429 or 403, we need to inform the user it might be a WAF block
-      throw new Error(`Spotify Extractor Error ${response.status}: ${errorText}`)
-    }
-
-    const data = await response.json()
+    const res = await fetch('https://api.spotify.com/v1/me/tracks?limit=50', { headers });
     
-    const tracks: RemoteTrack[] = data.items.map((item: any) => ({
+    if (res.status === 429) {
+      throw new Error('Spotify Rate Limit Exceeded (429). You have tested too many times. Please wait 1 hour and try again.');
+    }
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Spotify Extractor Error ${res.status}: ${errorText}`);
+    }
+
+    const data = await res.json();
+    const tracks = data.items.map((item: any) => ({
       remoteId: item.track.uri,
       source: 'spotify',
       title: item.track.name,

@@ -16,8 +16,6 @@ import { SyncManager } from '../sync/SyncManager'
 import { SpotifyExtractor } from '../extractors/SpotifyExtractor'
 import { YouTubeExtractor } from '../extractors/YouTubeExtractor'
 
-import { InvisibleExtractorWebView } from '../extractors/InvisibleExtractorWebView'
-
 interface DashboardProps {
   tracks: Track[]
 }
@@ -28,77 +26,44 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
   const activeTrack = useActiveTrack()
   const [isSyncing, setIsSyncing] = useState(false)
 
-  const [syncingSpotify, setSyncingSpotify] = useState(false)
-  const [syncingYoutube, setSyncingYoutube] = useState(false)
-  const [spotifyTokenData, setSpotifyTokenData] = useState('')
-  const [youtubeTokenData, setYoutubeTokenData] = useState('')
-
   const handleSync = async () => {
     try {
       setIsSyncing(true)
+      let syncedCount = 0;
 
       const spotifyToken = await SecureStore.getItemAsync('RES_SPOTIFY_EXTRACTED_TOKEN');
-      const youtubeToken = await SecureStore.getItemAsync('RES_YOUTUBE_EXTRACTED_COOKIE');
-      
-      if (!spotifyToken && !youtubeToken) {
-        alert('Please connect an account in Settings first.');
-        setIsSyncing(false);
-        return;
+      if (spotifyToken) {
+        try {
+          const playlist = await SpotifyExtractor.getLikedSongs();
+          await SyncManager.syncPlaylist(playlist);
+          syncedCount++;
+        } catch(e: any) {
+          alert(`Spotify Sync Error: ${e.message}`);
+        }
       }
 
-      if (spotifyToken) {
-        setSpotifyTokenData(spotifyToken);
-        setSyncingSpotify(true);
-      }
+      const youtubeToken = await SecureStore.getItemAsync('RES_YOUTUBE_EXTRACTED_COOKIE');
       if (youtubeToken) {
-        setYoutubeTokenData(youtubeToken);
-        setSyncingYoutube(true);
+        try {
+          // Pass the cookies to the new JSON API extractor
+          const playlist = await YouTubeExtractor.getPlaylist('LM', youtubeToken);
+          await SyncManager.syncPlaylist(playlist);
+          syncedCount++;
+        } catch(e: any) {
+          alert(`YouTube Sync Error: ${e.message}`);
+        }
+      }
+
+      if (syncedCount > 0) {
+        alert('Sync completed successfully!');
+      } else if (!spotifyToken && !youtubeToken) {
+        alert('Please connect an account in Settings first.');
       }
     } catch (e: any) {
-      alert(e.message || 'Error starting sync')
+      alert(e.message || 'Error syncing library')
+    } finally {
       setIsSyncing(false)
     }
-  }
-
-  const handleSpotifyExtracted = async (playlist: any) => {
-    try {
-      await SyncManager.syncPlaylist(playlist);
-      setSyncingSpotify(false);
-      if (!syncingYoutube) {
-        alert('Sync completed successfully!');
-        setIsSyncing(false);
-      }
-    } catch(e: any) {
-      alert(`Spotify Save Error: ${e.message}`);
-      setSyncingSpotify(false);
-      if (!syncingYoutube) setIsSyncing(false);
-    }
-  }
-
-  const handleYoutubeExtracted = async (playlist: any) => {
-    try {
-      await SyncManager.syncPlaylist(playlist);
-      setSyncingYoutube(false);
-      if (!syncingSpotify) {
-        alert('Sync completed successfully!');
-        setIsSyncing(false);
-      }
-    } catch(e: any) {
-      alert(`YouTube Save Error: ${e.message}`);
-      setSyncingYoutube(false);
-      if (!syncingSpotify) setIsSyncing(false);
-    }
-  }
-
-  const handleExtractorError = (platform: string, error: string) => {
-    alert(`${platform} Sync Error: ${error}`);
-    if (platform === 'Spotify') setSyncingSpotify(false);
-    if (platform === 'YouTube') setSyncingYoutube(false);
-    
-    // We can't synchronously check the other state here due to closures,
-    // but the next render will clean up setIsSyncing if both are false.
-    // For simplicity, we just stop the global spinner
-    setIsSyncing(false);
   }
 
   const handlePlayTrack = async (track: Track) => {
@@ -133,13 +98,13 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
       
       {/* Dynamic Background Gradient */}
       <LinearGradient
-        colors={['#1db95440', colors.background]}
+        colors={[colors.backgroundLight, colors.background]}
         style={StyleSheet.absoluteFill}
       />
 
       {/* Glassmorphism Header */}
       <BlurView intensity={80} tint="dark" style={styles.header}>
-        <Text style={styles.headerTitle}>Your Library</Text>
+        <Text style={styles.headerTitle}>Sonic Vault</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.settingsBtn}>
           <Ionicons name="settings-outline" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
@@ -187,23 +152,6 @@ const DashboardScreenBase: React.FC<DashboardProps> = ({ tracks }) => {
             </TouchableOpacity>
           </View>
         </BlurView>
-      )}
-
-      {syncingSpotify && (
-        <InvisibleExtractorWebView
-          platform="spotify"
-          token={spotifyTokenData}
-          onExtracted={handleSpotifyExtracted}
-          onError={(e) => handleExtractorError('Spotify', e)}
-        />
-      )}
-      {syncingYoutube && (
-        <InvisibleExtractorWebView
-          platform="youtube"
-          token={youtubeTokenData}
-          onExtracted={handleYoutubeExtracted}
-          onError={(e) => handleExtractorError('YouTube', e)}
-        />
       )}
     </View>
   )
